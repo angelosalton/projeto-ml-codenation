@@ -1,0 +1,9 @@
+{
+    "python.pythonPath": "/home/angelo/anaconda3/envs/projeto-ml-codenation/bin/python",
+    "python.testing.pytestArgs": [
+        "."
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.nosetestsEnabled": false,
+    "python.testing.pytestEnabled": true
+}
