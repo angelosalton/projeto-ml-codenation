@@ -18,7 +18,7 @@ logger = logging.Logger('root')
 server = Flask(__name__)
 
 
-@server.route('/')
+@server.route('/test')
 def hello():
     return 'Olá, mundo!'
 
@@ -30,7 +30,7 @@ def predict():
     :return: JSON com as ids de empresas previstas.
     :rtype: dict
     '''
-    
+
     request_raw = request.get_json(force=True)
     ids = request_raw['ids']
     n_rec = request_raw['n']
@@ -47,7 +47,7 @@ def predict():
     # consulta o portfolio no banco de dados de mercado
     try:
         full_data = pd.merge(left, db, on='id')
-        
+
     except Exception as e:
         output['status'] = 'Falha'
         output['reason'] = 'Nenhuma empresa do portfolio foi encontrada no banco de dados.'
@@ -59,17 +59,17 @@ def predict():
 
         # subconjunto com o portfolio informado
         tmp = db[db.index.isin(ids)]
-        
+
         # obtem as previsoes do modelo
-        distances, indexes = model.named_steps['model'].kneighbors(\
+        distances, indexes = model.named_steps['model'].kneighbors(
             model.named_steps['data_tr'].transform(tmp), n
         )
-        
-        return distances, indexes, df
+
+        return distances, indexes
 
     # chama a função
     try:
-        output['distances'], output['ids'], _ = recommendations(ids, n_rec)
+        output['distances'], output['ids'] = recommendations(ids, n_rec)
         output['status'] = 'Sucesso'
         logger.info(f'Em {datetime.now().isoformat()}: Sucesso')
 
