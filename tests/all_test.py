@@ -22,10 +22,10 @@ def test_api_alive():
     time.sleep(1)
 
     actual = req.status_code
-    predicted = 200 # sucesso
+    predicted = 200  # sucesso
 
     assert actual == predicted
-    
+
 
 class test_api_recomedacoes:
     '''
@@ -36,7 +36,6 @@ class test_api_recomedacoes:
     pf1 = pd.read_csv('../data/estaticos_portfolio1.csv')['id'].tolist()
     req = requests.post(url_dev+'predict/', json={'ids': pf1, 'n_rec': 5})
 
-
     def test_api_rec1_status(self):
         '''
         Testa resposta da requisição.
@@ -46,12 +45,11 @@ class test_api_recomedacoes:
 
         assert actual == predicted
 
-
     def test_api_rec1_dados(self):
         '''
         Testa os dados retornados da requisição.
         '''
         actual = self.req.raw
-        predicted = 'a'
+        # TODO: predicted = 'a'
 
         assert actual == predicted
