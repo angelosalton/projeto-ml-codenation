@@ -18,7 +18,7 @@ logger = logging.Logger('root')
 server = Flask(__name__)
 
 
-@server.route('/test')
+@server.route('/hello')
 def hello():
     return 'Olá, mundo!'
 
@@ -65,11 +65,13 @@ def predict():
             model.named_steps['data_tr'].transform(tmp), n
         )
 
-        return distances, indexes
+        ids = full_data.iloc[indexes[:, 0].flatten().tolist(), 0]
+
+        return distances, ids
 
     # chama a função
     try:
-        output['distances'], output['ids'] = recommendations(ids, n_rec)
+        _, output['ids'] = recommendations(ids, n_rec)
         output['status'] = 'Sucesso'
         logger.info(f'Em {datetime.now().isoformat()}: Sucesso')
 
