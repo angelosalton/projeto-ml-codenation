@@ -18,7 +18,7 @@ def test_api_alive():
     '''
 
     # uma requisição qualquer
-    req = requests.get(url_dev)
+    req = requests.get(url_dev+'hello')
     time.sleep(1)
 
     actual = req.status_code
