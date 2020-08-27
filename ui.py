@@ -1,23 +1,28 @@
-from api import server
+import base64
+import io
 
 import dash
+import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
-import dash_bootstrap_components as dbc
 import dash_table as dt
+import pandas as pd
+import requests
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 
-import base64
-import io
-import pandas as pd
+from api import server
+
+# url
+app_url = 'localhost'
+app_port = '8050'
 
 # declara o aplicativo
 app = dash.Dash(
     __name__,
     server=server,
     # routes_pathname_prefix='/welcome/',
-    external_stylesheets=[dbc.themes.PULSE]
+    external_stylesheets=[dbc.themes.FLATLY]
 )
 
 # layout
@@ -50,7 +55,7 @@ options = dbc.Row([
     html.H4('Parâmetros'),
     # recomendações
     html.P('Número de recomendações'),
-    dbc.Input(id='input-recomendacoes', type='number',
+    dbc.Input(id='input-recommends', type='number',
               min=1, max=100, value=10),
     # portfolio
     html.P('Selecione o portfólio de empresas'),
@@ -62,10 +67,18 @@ options = dbc.Row([
             {'label': 'Exemplo 3', 'value': 'ex3'},
             {'label': 'Personalizado', 'value': 'custom'}
         ],
-        value='ex1'
+        value='ex1',
+        searchable=False,
+        clearable=False
     ),
     # inserir portfolio personalizado
-    html.Div(id='btn-upload'),
+    dcc.Upload(
+        id='upload-data',
+        children=dbc.Button('Carregar arquivo', outline=True, color='dark')
+    ),
+    # atualizar dados
+    html.P(),
+    dbc.Button('Atualizar portfólio', id='btn-portfolio'),
     # gerar recomendações
     html.P(),
     dbc.Button('Gerar recomendações', id='btn-update')
@@ -83,16 +96,17 @@ app.layout = dbc.Container([
     # barra superior
     navbar,
     # data stores
-    dcc.Store(id='data-store', storage_type='session'),
-    dcc.Store(id='recommends-store', storage_type='session'),
+    dcc.Store('ids-store', storage_type='session'),
+    dcc.Store('recommends-store', storage_type='session'),
     # alertas
-    #dbc.Alert("Carga completa!", color="primary", fade=True, duration=3000),
+    # dbc.Alert("Dados carregados com sucesso!", color="success", fade=True, duration=3000),
+    # dbc.Alert("Erro na carga dos dados!", color="danger", fade=True, duration=3000),
     # inicio da pagina
     dbc.Row([
         # barra lateral
         dbc.Col([
             options
-        ], md=3),
+        ], md=4),
         # corpo da pagina
         dbc.Col([
             welcome,
@@ -102,36 +116,36 @@ app.layout = dbc.Container([
             dcc.Loading([
                 view_recommends
             ])
-        ], md=9)
+        ], md=8)
     ])
 ])
 
+# funções auxiliares --------------------------------------
 
-# callbacks
 
-# inserir portfolio personalizado
-@app.callback(
-    Output('btn-upload', 'children'),
-    [Input('dropdown-portfolio', 'value')])
-def upload_portfolio(value):
+def _print_table(df_json):
     '''
-    Abre opção de carregar arquivo se portfolio customizado for escolhido.
+    Função auxiliar que retorna uma tabela dos dados informados.
     '''
-    if value == 'custom':
-        return html.Div([
-            dcc.Upload(
-                id='upload-portfolio',
-                children=dbc.Row([
-                    html.A('Upload *.csv')
-                ]),
-                multiple=False
-            ),
-        ])
-    else:
-        return html.Div()
+    df = pd.DataFrame.from_dict(df_json)
+    df = df[['id', 'sg_uf', 'nm_segmento']]
 
-# carrega arquivo portfoio
+    return dt.DataTable(
+        data=df.to_dict(orient='records'),
+        columns=[{"name": i, "id": i} for i in df.columns],
+        editable=True,
+        style_cell={
+            'fontSize': 12,
+            'font-family': 'Roboto',
+            'maxWidth': '40px'
+        }
+    )
+
+
 def parse_contents(contents, filename):
+    '''
+    Faz a leitura do arquivo *.csv.
+    '''
     _, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
 
@@ -150,64 +164,88 @@ def parse_contents(contents, filename):
     return df.to_json(orient='records')
 
 
-@app.callback(Output('data-store', 'data'),
-              [Input('upload-portfolio', 'contents')],
-              [State('upload-portfolio', 'filename'),
-               State('data-store', 'data')])
-def update_output(list_of_contents, list_of_names, data):
-    if list_of_contents is not None:
-        children = [
-            parse_contents(c, n) for c, n in
-            zip(list_of_contents, list_of_names)]
-        return children
+# callbacks -----------------------------------------------
+
+# TODO: selecionador de portfolio
+@app.callback(
+    [Output('ids-store', 'data'),
+     Output('upload-data', 'style')],
+    [Input('btn-portfolio', 'n_clicks')],
+    [State('dropdown-portfolio', 'value')])
+def select_portfolio(clicks, value):
+    '''
+    Seleciona o portfolio, retornando a lista de ids para o cache.
+    '''
+    if value != 'custom':
+        ids = {'ids': pd.read_csv(
+            f'data/estaticos_portfolio{value[2]}.csv')['id'].tolist()}
+        style = {'display': 'none'}
+
+    else:
+        ids = {'ids': None}
+        style = {'display': 'block'}
+
+    return ids, style
 
 
 # TODO: chamada do modelo
-
-# visualizador portfolio
-def _print_table(ts, clicks, df_json):
+@app.callback(
+    Output('recommends-store', 'data'),
+    [Input('btn-update', 'n_clicks'),
+     Input('input-recommends', 'value')],
+    [State('ids-store', 'data')])
+def run_model(clicks, n_rec, ids_port):
     '''
-    Função auxiliar que retorna uma tabela dos dados em cache.
+    Chama o modelo pela API para obter as empresas recomendadas.
     '''
-    if df_json is None:
+    if ids_port is None:
         raise PreventUpdate
 
-    df = pd.read_json(df_json, orient='records')
+    # API request
+    req = requests.post(f'http://{app_url}:{app_port}/predict',
+                        json={'ids': ids_port['ids'], 'n_rec': n_rec})
 
-    return dt.DataTable(
-        data=df.to_dict(orient='records'),
-        columns=[{"name": i, "id": i} for i in df.columns],
-        editable=True,
-        style_cell={
-            'fontSize': 12,
-            'font-family': 'Roboto',
-            'maxWidth': '40px'
-        }
-    )
+    # retorna as empresas recomendadas
+    if req.status_code == 200:
+        return req.json()['ids']
+    else:
+        return {}
 
-# visualiza portfolio
 
+# visualizador portfolio
 
 @app.callback(
     Output('table-portfolio', 'children'),
-    [Input('data-store', 'modified_timestamp'),
-     Input('btn-update', 'n_clicks')],
-    [State('data-store', 'data')])
-def print_portfolio(ts, clicks, df_json):
-    return _print_table(ts, clicks, df_json)
+    [Input('btn-portfolio', 'n_clicks')],
+    [State('ids-store', 'data')])
+def print_portfolio(clicks, ids):
+    '''
+    Visualiza o portfólio.
+    '''
+    if ids is None:
+        return html.P('Selecione um portfolio.')
 
-# visualizador recomendações
+    # requisição API
+    req = requests.post(f'http://{app_url}:{app_port}/get_table',
+                        json={'ids': ids['ids']})
+
+    # verifica a resposta
+    if req.status_code != 200:
+        return html.P('Selecione um portfolio..')
+
+    return _print_table(req.json())
 
 
 @app.callback(
     Output('table-recommends', 'children'),
-    [Input('recommends-store', 'modified_timestamp'),
-     Input('btn-update', 'n_clicks')],
-    [State('recommends-store', 'data')])
-def print_recommends(ts, clicks, df_json):
-    return _print_table(ts, clicks, df_json)
+    [Input('btn-update', 'n_clicks')])
+def print_recommends(clicks):
+    '''
+    Visualiza as empresas recomendadas.
+    '''
+    # return _print_table(df_json)
 
 
 # script
 if __name__ == '__main__':
-    app.run_server(host='0.0.0.0', port='8050')
+    app.run_server(host=app_url, port=app_port, debug=True)
