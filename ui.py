@@ -42,46 +42,57 @@ navbar = dbc.Navbar([
     dark=True
 )
 
-welcome = dbc.Row([
-    dcc.Markdown('''
+welcome = dcc.Markdown('''
     # Seja bem vindo!
 
     lalalala...
+
+    eaeaaeeaeaea....
     ''')
-])
 
+_styles = {'style':
+           {'padding-left': '1em',
+            'padding-right': '1em'}
+           }
 
-options = dbc.Row([
-    html.H4('Parâmetros'),
+options = dbc.Card([
     # recomendações
-    html.P('Número de recomendações'),
-    dbc.Input(id='input-recommends', type='number',
-              min=1, max=100, value=10),
+    dbc.FormGroup([
+        dbc.Label('Número de recomendações'),
+        dbc.Input(id='input-recommends', type='number',
+                  min=1, max=100, value=10),
+    ], **_styles),
     # portfolio
-    html.P('Selecione o portfólio de empresas'),
-    dcc.Dropdown(
-        id='dropdown-portfolio',
-        options=[
-            {'label': 'Exemplo 1', 'value': 'ex1'},
-            {'label': 'Exemplo 2', 'value': 'ex2'},
-            {'label': 'Exemplo 3', 'value': 'ex3'},
-            {'label': 'Personalizado', 'value': 'custom'}
-        ],
-        value='ex1',
-        searchable=False,
-        clearable=False
-    ),
+    dbc.FormGroup([
+        dbc.Label('Selecione o portfólio de empresas'),
+        dcc.Dropdown(
+            id='dropdown-portfolio',
+            options=[
+                {'label': 'Exemplo 1', 'value': 'ex1'},
+                {'label': 'Exemplo 2', 'value': 'ex2'},
+                {'label': 'Exemplo 3', 'value': 'ex3'},
+                {'label': 'Personalizado', 'value': 'custom'}
+            ],
+            value='ex1',
+            searchable=False,
+            clearable=False
+        )
+    ], **_styles),
     # inserir portfolio personalizado
-    dcc.Upload(
-        id='upload-data',
-        children=dbc.Button('Carregar arquivo', outline=True, color='dark')
-    ),
+    dbc.FormGroup([
+        dcc.Upload(
+            id='upload-data',
+            children=dbc.Button('Carregar arquivo', outline=True, color='dark')
+        )
+    ], **_styles),
     # atualizar dados
-    html.P(),
-    dbc.Button('Atualizar portfólio', id='btn-portfolio'),
+    dbc.FormGroup([
+        dbc.Button('Atualizar portfólio', id='btn-portfolio')
+    ], **_styles),
     # gerar recomendações
-    html.P(),
-    dbc.Button('Gerar recomendações', id='btn-update')
+    dbc.FormGroup([
+        dbc.Button('Gerar recomendações', id='btn-update')
+    ], **_styles)
 ])
 
 view_portfolio = dbc.Row([
@@ -102,21 +113,23 @@ app.layout = dbc.Container([
     # dbc.Alert("Dados carregados com sucesso!", color="success", fade=True, duration=3000),
     # dbc.Alert("Erro na carga dos dados!", color="danger", fade=True, duration=3000),
     # inicio da pagina
+    welcome,
     dbc.Row([
         # barra lateral
         dbc.Col([
             options
-        ], md=4),
+        ], md=3),
         # corpo da pagina
         dbc.Col([
-            welcome,
-            dcc.Loading([
-                view_portfolio
-            ]),
-            dcc.Loading([
-                view_recommends
+            dbc.Row([
+                dcc.Loading([
+                    view_portfolio
+                ]),
+                dcc.Loading([
+                    view_recommends
+                ])
             ])
-        ], md=8)
+        ], md=9)
     ])
 ])
 
