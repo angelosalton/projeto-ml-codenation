@@ -124,7 +124,9 @@ app.layout = dbc.Container([
             dbc.Row([
                 dcc.Loading([
                     view_portfolio
-                ]),
+                ])
+            ]),
+            dbc.Row([
                 dcc.Loading([
                     view_recommends
                 ])
@@ -140,7 +142,7 @@ def _print_table(df_json):
     '''
     Função auxiliar que retorna uma tabela dos dados informados.
     '''
-    df = pd.DataFrame.from_dict(df_json)
+    df = pd.read_json(df_json)
     df = df[['id', 'sg_uf', 'nm_segmento']]
 
     return dt.DataTable(
@@ -148,10 +150,9 @@ def _print_table(df_json):
         columns=[{"name": i, "id": i} for i in df.columns],
         editable=True,
         style_cell={
-            'fontSize': 12,
-            'font-family': 'Roboto',
-            'maxWidth': '40px'
-        }
+            'fontSize': 11
+        },
+        page_size=10
     )
 
 
@@ -201,30 +202,6 @@ def select_portfolio(clicks, value):
     return ids, style
 
 
-# TODO: chamada do modelo
-@app.callback(
-    Output('recommends-store', 'data'),
-    [Input('btn-update', 'n_clicks'),
-     Input('input-recommends', 'value')],
-    [State('ids-store', 'data')])
-def run_model(clicks, n_rec, ids_port):
-    '''
-    Chama o modelo pela API para obter as empresas recomendadas.
-    '''
-    if ids_port is None:
-        raise PreventUpdate
-
-    # API request
-    req = requests.post(f'http://{app_url}:{app_port}/predict',
-                        json={'ids': ids_port['ids'], 'n_rec': n_rec})
-
-    # retorna as empresas recomendadas
-    if req.status_code == 200:
-        return req.json()['ids']
-    else:
-        return {}
-
-
 # visualizador portfolio
 
 @app.callback(
@@ -236,7 +213,10 @@ def print_portfolio(clicks, ids):
     Visualiza o portfólio.
     '''
     if ids is None:
-        return html.P('Selecione um portfolio.')
+        return html.Div([
+            html.H4('Seu portfólio'),
+            html.P('Selecione.')
+        ])
 
     # requisição API
     req = requests.post(f'http://{app_url}:{app_port}/get_table',
@@ -246,17 +226,42 @@ def print_portfolio(clicks, ids):
     if req.status_code != 200:
         return html.P('Selecione um portfolio..')
 
-    return _print_table(req.json())
+    return html.Div([
+        html.H4('Seu portfólio'),
+        _print_table(req.json()['data'])
+    ])
 
 
 @app.callback(
     Output('table-recommends', 'children'),
-    [Input('btn-update', 'n_clicks')])
-def print_recommends(clicks):
+    [Input('btn-update', 'n_clicks')],
+    [State('input-recommends', 'value'),
+     State('ids-store', 'data')])
+def print_recommends(clicks, n_rec, ids_json):
     '''
     Visualiza as empresas recomendadas.
     '''
-    # return _print_table(df_json)
+    if ids_json is None:
+        return html.Div([
+            html.H4('Recomendações'),
+            html.P('Carregue um portfólio e clique em Gerar Recomendações.')
+        ])
+
+    # requisição API
+    req = requests.post(f'http://{app_url}:{app_port}/predict',
+                        json={'ids': ids_json, 'n_rec': n_rec})
+
+    # verifica a resposta
+    if req.status_code != 200 or req.json()['status'] != 'Sucesso':
+        return html.Div([
+            html.H4('Recomendações'),
+            html.P('Não há recomendações disponíveis.')
+        ])
+
+    return html.Div([
+        html.H4('Recomendações'),
+        _print_table(req.json()['data'])
+    ])
 
 
 # script
